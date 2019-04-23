@@ -36,13 +36,21 @@ meta2 <- meta %>%
 
 # Matti model
 brm_matti <- brm(
-  MeanES | se(sei) ~ 1 + (1 | StudyID), 
-  prior = set_prior("uniform(0, 1000)", class = "sd"),
+  MeanES | se(VarianceES) ~ 1 + (1 | StudyRef), 
+  prior = set_prior("normal(0, 10)", class = "sd"),
   data = meta2, 
+  iter = 10000,
   cores = 4
 )
 
 
-brm_matti
+plot(brm_matti)
+pairs(brm_matti)
+```
+
+```{r meta brm forest}
+brmstools::forest(brm_matti,
+       show_data = TRUE,
+       av_name = "Effect size")
 ```
 
