@@ -1,0 +1,48 @@
+---
+title: "A4_jan"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(pacman)
+p_load(tidyverse, readxl, brms, metafor, brmstools, ggunchained)
+
+pitch <- read_excel("Assignment4PitchDatav2.xlsx")
+meta <- read_excel("Assignment4MetaData.xlsx")
+```
+
+
+```{r meta situation}
+meta %>%
+  filter(!is.na(MeanES)) %>%
+  ggplot(aes(x = MeanES, y = StudyRef)) +
+  geom_segment(aes(x = MeanES-SdES, xend = MeanES+SdES, y=StudyRef, yend=StudyRef)) +
+  geom_point() +
+  geom_vline(xintercept = 0, color = "grey42") +
+  theme_janco_point()
+```
+
+
+```{r standard error and model}
+meta2 <- meta %>%
+  # counting sei = standard deviation / sqrt()
+  mutate(sample = SAMPLE_SIZE_SZ + SAMPLE_SIZE_CT,
+         sei = SdES / sqrt(sample)) %>%
+  # filter non complete cases
+  filter(!is.na(MeanES))
+
+
+# Matti model
+brm_matti <- brm(
+  MeanES | se(sei) ~ 1 + (1 | StudyID), 
+  prior = set_prior("uniform(0, 1000)", class = "sd"),
+  data = meta2, 
+  cores = 4
+)
+
+
+brm_matti
+```
+
