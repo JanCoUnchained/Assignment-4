@@ -79,12 +79,15 @@ brm_mod <- brm(
   mod_f, 
   prior = c(
     prior(normal(0, 2), class = "Intercept"),
-    prior(normal(0, 10), class = "sd"),
-    prior(normal(0, 2), class = "b")),
+    #prior(normal(0, 2), class = "sd", group = "studynr"),
+    prior(normal(0, 2), class = "sd"),
+    prior(normal(0, 2), class = "b"),
+    prior(normal(0, 2), class = "sigma")),
   data = pitch2, 
   cores = 4
 )
 
+brm_mod
 plot(brm_mod)
 ```
 
