@@ -82,7 +82,8 @@ pitch2 <- pitch %>%
 
 
 ```{r t3 model bogus prior}
-mod_f <- bf("PitchSD_s ~ diagnosis + (1 | studynr) + (1 | ID)")
+#change has been made here: (1|trial) added
+mod_f <- bf("PitchSD_s ~ diagnosis + (1 | studynr) + (1 | ID) + (1|trial)")
 
 brm_mod <- brm(
   mod_f, 
@@ -112,12 +113,68 @@ samples <- posterior_samples(brm_mod, pars = "b") #only brm_mod if all param.
 head(samples)
 dens(samples)
 
-```
+#plot predictions. 
+mod_line <- fitted(brm_mod) %>% #fitted giving confidence as well 
+  cbind.data.frame(pitch2)
 
+#predictions plot split violin
+p1 <- mod_line %>%
+  ggplot(aes(x = diagnosis, y = Estimate,
+             color = factor(diagnosis),
+             fill = factor(diagnosis))) +
+  geom_split_violin() +
+  geom_jitter(alpha = 0.4, width = 0.4)
+
+#plot split violin 
+p2 <- pitch2 %>%
+  ggplot(aes(x = diagnosis, y = PitchSD_s,
+             color = factor(diagnosis),
+             fill = factor(diagnosis)))+
+  geom_split_violin() +
+  geom_jitter(alpha = 0.4, width = 0.4) +
+  ylim(-1, 2)
+
+#studies plot data
+p3 <- pitch2 %>%
+  ggplot(aes(x = diagnosis, y = PitchSD_s,
+             color = factor(diagnosis),
+             fill = factor(diagnosis)))+
+  geom_split_violin() +
+  geom_jitter(alpha = 0.4, width = 0.4) +
+  facet_wrap(~studynr)
+
+#studies plot prediction
+p4 <- mod_line %>%
+  ggplot(aes(x = diagnosis, y = Estimate,
+             color = factor(diagnosis),
+             fill = factor(diagnosis)))+
+  geom_split_violin() +
+  geom_jitter(alpha = 0.4, width = 0.4) +
+  facet_wrap(~studynr)
+
+#summary
+library(cowplot)
+plot_grid(p1, p2)
+plot_grid(p3, p4)
+
+
+```
 
 
 # TASK 4
 ```{r}
+
+meta_mod <- brm(
+  mod_f, 
+  prior = c(
+    prior(normal(0, 0.5), class = "Intercept"),
+    #prior(normal(0, 2), class = "sd", group = "studynr"),
+    prior(normal(0, 0.5), class = "sd"),
+    prior(normal(0, 1), class = "b"),
+    prior(normal(0, 1), class = "sigma")),
+  data = pitch2, 
+  cores = 4, iter = 4000, warmup = 2000
+)
 
 ```
 
