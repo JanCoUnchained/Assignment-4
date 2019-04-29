@@ -164,17 +164,24 @@ plot_grid(p3, p4)
 # TASK 4
 ```{r}
 
+#updating prior on the group difference. 
 meta_mod <- brm(
   mod_f, 
   prior = c(
     prior(normal(0, 0.5), class = "Intercept"),
     #prior(normal(0, 2), class = "sd", group = "studynr"),
     prior(normal(0, 0.5), class = "sd"),
-    prior(normal(0, 1), class = "b"),
+    prior(normal(-0.57, 0.25), class = "b"), #has very little weight. 
     prior(normal(0, 1), class = "sigma")),
   data = pitch2, 
   cores = 4, iter = 4000, warmup = 2000
 )
+
+brm_mod
+meta_mod
+brm_matti
+
+library(rethinking)
 
 ```
 
