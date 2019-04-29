@@ -1,0 +1,123 @@
+---
+title: "A4_jan"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(pacman)
+p_load(tidyverse, readxl, brms, metafor, brmstools, ggunchained)
+
+pitch <- read_excel("Assignment4PitchDatav2.xlsx")
+meta <- read_excel("Assignment4MetaData.xlsx")
+```
+
+# TASK 1
+
+```{r meta situation}
+meta %>%
+  filter(!is.na(MeanES)) %>%
+  ggplot(aes(x = MeanES, y = StudyRef)) +
+  geom_segment(aes(x = MeanES-SdES, xend = MeanES+SdES, y=StudyRef, yend=StudyRef)) +
+  geom_point() +
+  geom_vline(xintercept = 0, color = "grey42") +
+  theme_janco_point()
+```
+
+```{r standard error and model}
+meta2 <- meta %>%
+  # counting sei = standard deviation / sqrt()
+  mutate(sample = SAMPLE_SIZE_SZ + SAMPLE_SIZE_CT,
+         sei = SdES / sqrt(sample)) %>%
+  # filter non complete cases
+  filter(!is.na(MeanES))
+
+
+# Matti model
+brm_matti <- brm(
+  MeanES | se(VarianceES) ~ 1 + (1 | StudyRef), #
+  prior = set_prior("uniform(0, 1000)", class = "sd"),
+  data = meta2, 
+  iter = 10000,
+  cores = 4
+)
+
+#effect size?
+plot(brm_matti)
+pairs(brm_matti)
+brm_matti
+
+```
+
+nice plot. 
+
+```{r meta brm forest}
+brmstools::forest(brm_matti,
+       show_data = TRUE,
+       av_name = "Effect size")
+```
+
+
+# TASK 2
+#standardizing. 
+
+```{r summarize}
+#overview. 
+pitch_sum <- pitch %>%
+  group_by(studynr, diagnosis) %>%
+  summarise(mean = mean(PitchSD), n = n())
+
+#scaling & centering [z-scale] 
+pitch2 <- pitch %>%
+  mutate(PitchSD_s = as.vector(scale(PitchSD)))
+
+```
+
+
+# TASK 3
+```{r t3 priors}
+
+```
+
+
+```{r t3 model bogus prior}
+mod_f <- bf("PitchSD_s ~ diagnosis + (1 | studynr) + (1 | ID)")
+
+brm_mod <- brm(
+  mod_f, 
+  prior = c(
+    prior(normal(0, 0.5), class = "Intercept"),
+    #prior(normal(0, 2), class = "sd", group = "studynr"),
+    prior(normal(0, 0.5), class = "sd"),
+    prior(normal(0, 1), class = "b"),
+    prior(normal(0, 1), class = "sigma")),
+  data = pitch2, 
+  cores = 4, iter = 4000, warmup = 2000
+)
+
+brm_mod
+plot(brm_mod) #looks good. 
+pairs(brm_mod) #looks good --> answering a question as well. 
+
+```
+
+simulating from the model
+
+```{r}
+
+#posterior samples
+library(rethinking)
+samples <- posterior_samples(brm_mod, pars = "b") #only brm_mod if all param. 
+head(samples)
+dens(samples)
+
+```
+
+
+
+# TASK 4
+```{r}
+
+```
+
