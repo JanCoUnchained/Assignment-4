@@ -1,0 +1,30 @@
+---
+title: "e"
+author: "Victor Møller"
+date: "30 apr 2019"
+output: html_document
+---
+
+This document is for ideas & questions. 
+The code below has one change to the model call which is an intercept 
+before diagnosis. Malte has this in his model (& I think it is generally implicit in the lme4). However, I cannot tell from the output that this is any different from when we do not include it. 
+
+```{r setup, include=FALSE}
+mod_b <- bf("pitchSDLOGz ~ 1 + diagnosis + (1|studynr) + (1 | ID) + (1|trial)")
+
+brm_b <- brm(
+  mod_f, 
+  prior = c(
+    prior(normal(0, 0.2), class = "Intercept"),
+    prior(normal(0, 0.2), class = "sd"), #Rhat = 1.01, could be more regularizing.
+    prior(normal(0, 0.3), class = "b"),
+    prior(normal(0, 0.3), class = "sigma")),
+  data = pitch3, 
+  cores = 4, iter = 4000, warmup = 2000,
+  sample_prior = TRUE #added for later use. 
+)
+
+# model estimates 
+brm_b #could be improved (when is it hacking?..) 
+
+```

@@ -17,8 +17,8 @@ meta <- read_excel("Assignment4MetaData.xlsx")
 
 ```{r meta situation}
 meta %>%
-  filter(!is.na(MeanES)) %>%
-  ggplot(aes(x = MeanES, y = StudyRef)) +
+  filter(!is.na(MeanES)) %>% #no NA. 
+  ggplot(aes(x = MeanES, y = StudyRef)) + 
   geom_segment(aes(x = MeanES-SdES, xend = MeanES+SdES, y=StudyRef, yend=StudyRef)) +
   geom_point() +
   geom_vline(xintercept = 0, color = "grey42") +
@@ -26,6 +26,8 @@ meta %>%
 ```
 
 ```{r standard error and model}
+
+#not necessary?
 meta2 <- meta %>%
   # counting sei = standard deviation / sqrt()
   mutate(sample = SAMPLE_SIZE_SZ + SAMPLE_SIZE_CT,
@@ -34,19 +36,19 @@ meta2 <- meta %>%
   filter(!is.na(MeanES))
 
 
-# Matti model
+# Matti model 
 brm_matti <- brm(
-  MeanES | se(VarianceES) ~ 1 + (1 | StudyRef), #
-  prior = set_prior("uniform(0, 1000)", class = "sd"),
+  MeanES | se(VarianceES) ~ 1 + (1 | StudyRef), #works, we know the variance. 
+  prior = set_prior("uniform(0, 1000)", class = "sd"), 
   data = meta2, 
   iter = 10000,
   cores = 4
-)
+) 
 
 #effect size?
 plot(brm_matti)
 pairs(brm_matti)
-brm_matti
+brm_matti #est error = 0.25 (much bigger than the other models).
 
 ```
 
@@ -63,7 +65,7 @@ brmstools::forest(brm_matti,
 #standardizing. 
 
 ```{r summarize}
-#overview. 
+#overview (I don't think we actually use this)
 pitch_sum <- pitch %>%
   group_by(studynr, diagnosis) %>%
   summarise(mean = mean(PitchSD), n = n())
@@ -82,21 +84,35 @@ pitch2 <- pitch %>%
 
 
 ```{r t3 model bogus prior}
+
+#lognormal transformation & then z-scaling
+pitch2$diagnosis <- as.factor(pitch2$diagnosis)
+
+pitch3 <- pitch2 %>%
+  mutate(pitchSDLOG = log(PitchSD),
+         pitchSDLOGz = scale(pitchSDLOG))
+
+
 #change has been made here: (1|trial) added
-mod_f <- bf("PitchSD_s ~ diagnosis + (1 | studynr) + (1 | ID) + (1|trial)")
+#which random effects?
+mod_f <- bf("pitchSDLOG ~ diagnosis + (1|studynr) + (1 | ID) + (1|trial)")
 
 brm_mod <- brm(
   mod_f, 
   prior = c(
-    prior(normal(0, 0.5), class = "Intercept"),
-    #prior(normal(0, 2), class = "sd", group = "studynr"),
+    prior(normal(2.5, 0.5), class = "Intercept"),
     prior(normal(0, 0.5), class = "sd"),
     prior(normal(0, 1), class = "b"),
     prior(normal(0, 1), class = "sigma")),
-  data = pitch2, 
+  data = pitch3, 
   cores = 4, iter = 4000, warmup = 2000
 )
 
+#pp_check looks weird
+pp_check(brm_mod, nsamples = 50) #what does it do?
+brms::marginal_effects(brm_mod) #marginal effect predicted. 
+
+#the model 
 brm_mod
 plot(brm_mod) #looks good. 
 pairs(brm_mod) #looks good --> answering a question as well. 
@@ -107,14 +123,17 @@ simulating from the model
 
 ```{r}
 
+
 #posterior samples
 library(rethinking)
-samples <- posterior_samples(brm_mod, pars = "b") #only brm_mod if all param. 
+samples <- posterior_samples(brm_mod, pars = "b") #all effects.  
 head(samples)
 dens(samples)
+samples1 <- posterior_samples(brm_mod)
+fitted1 <- fitted(brm_mod)
 
 #plot predictions. 
-mod_line <- fitted(brm_mod) %>% #fitted giving confidence as well 
+mod_line <- fitted(brm_mod) %>% #population parameters (fitted).
   cbind.data.frame(pitch2)
 
 #predictions plot split violin
@@ -165,6 +184,7 @@ plot_grid(p3, p4)
 ```{r}
 
 #updating prior on the group difference. 
+#not a big difference. 
 meta_mod <- brm(
   mod_f, 
   prior = c(
@@ -177,11 +197,40 @@ meta_mod <- brm(
   cores = 4, iter = 4000, warmup = 2000
 )
 
+```
+
+checking for all the models 
+
+```{r}
+#posterior checks
+pp_check(brm_mod) #fuck
+pp_check(meta_mod) #fuck
+pp_check(brm_matti) #good
+
+#no difference between bogus priors & meta priors
 brm_mod
 meta_mod
 brm_matti
 
-library(rethinking)
+#systematic error in divergent transitions?
+pairs(brm_mod, np = nuts_params(brm_mod)) #
+
+```
+
+Q6 comparison.
+Almost the same. 
+
+```{r}
+# criterion. 
+library(pacman)
+p_load(tidyverse, rethinking, brms, brmstools)
+b1 <- add_criterion(meta_mod, "waic")
+b2 <- add_criterion(brm_mod, "waic")
+w <- loo_compare(b1, b2, criterion = "waic")
+print(w, simplify = F)
+
+#comparing them 
+waic(meta_mod, brm_mod)
 
 ```
 
