@@ -1,0 +1,120 @@
+---
+title: "A4_cheatsheet"
+author: "Victor Møller"
+date: "30 apr 2019"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#packages
+library(pacman)
+p_load(tidyverse, readxl, brms, metafor, brmstools, ggunchained, cowplot)
+
+#your data
+pitch <- read_excel("Assignment4PitchDatav2.xlsx")
+meta <- read_excel("Assignment4MetaData.xlsx")
+```
+
+Transformations to be done on meta-data.
+Math taken from: 
+https://onlinelibrary-wiley-com.ez.statsbiblioteket.dk:12048/doi/epdf/10.1002/sim.1525
+
+Steps in the next chunk:  
+1. clean subset of meta-data. 
+2. calculate the variation of standard deviation.
+3. use the variation to calculate the logarithm of standard deviation.
+4. use the variation to calculate the logarithm of the mean.
+5. use escalc() to obtain effect size which you'll be using. 
+--> yi (new varialbe) = effect size.
+--> vi (new variable) = standard deviation of effect size. 
+6. These two variables which escalc() outputs (yi, vi) are what you will be using instead of "MeanES" & "VarianceES". 
+
+```{r}
+
+#subset with clean data (I.e., only studies with the variables we need)
+meta_clean <- meta %>%
+  subset(MeanES != "NA")
+
+#calculating variation (necessary to obtain log of standard deviation).
+meta_clean <- meta_clean %>%
+  mutate(varSDSZ = log(1+(PITCH_F0SD_SZ_SD^2/PITCH_F0SD_SZ_M^2)),
+         varSDHC = log(1+(PITCH_F0SD_HC_SD^2/PITCH_F0SD_HC_M^2)))
+
+#calculation for log of standard deviation from variance
+meta_clean <- meta_clean %>%
+  mutate(logSDSZ = sqrt(varSDSZ),
+         logSDHC = sqrt(varSDHC))
+
+#calculating the logarithm of mean from (old mean) & variance
+meta_clean <- meta_clean %>%
+  mutate(logmeanSZ = log(PITCH_F0SD_SZ_M) - 0.5 * varSDSZ,
+         logmeanHC = log(PITCH_F0SD_HC_M) - 0.5 * varSDHC)
+
+#effect size for standard deviation of pitch
+meta_ready=escalc('SMD', n1i=SAMPLE_SIZE_SZ, n2i=SAMPLE_SIZE_CT, m1i=logmeanSZ,
+m2i=logmeanHC, sd1i=logSDSZ, sd2i=logSDHC,
+data = meta_clean)
+
+```
+
+now make your meta-model:
+
+```{r}
+
+brm_matti <- brm(
+  yi | se(vi) ~ 1 + (1 | StudyRef), #works, we know the variance. 
+  prior = set_prior("uniform(0, 10)", class = "sd"), 
+  data = meta_ready, 
+  iter = 10000,
+  cores = 4
+) 
+
+brm_matti
+
+```
+
+steps in prep of pitch data: 
+1. take the logarithm of the outcome variable.
+2. z-scale it as well (to make it compatible with the meta-analysis output).
+
+```{r}
+
+#transforming pitch
+pitch_trans <- pitch %>%
+  mutate(pitchSDLOG = log(PitchSD), #logarithm
+         pitchSDLOGz = scale(pitchSDLOG), #z-scaling 
+         diagnosis = as.factor(diagnosis)) #as factor (not necessary)
+
+```
+
+now make your model
+
+```{r}
+
+#the regression
+mod_f <- bf("pitchSDLOGz ~ diagnosis + (1|studynr) + (1 | ID) + (1|trial)")
+
+#running the model with regularizing priors 
+brm_mod <- brm(
+  mod_f, 
+  prior = c(
+    prior(normal(0, 0.2), class = "Intercept"),
+    prior(normal(0, 0.2), class = "sd"), #Rhat = 1.01, could be more regularizing.
+    prior(normal(0, 0.3), class = "b"),
+    prior(normal(0, 0.3), class = "sigma")),
+  data = pitch_trans, 
+  cores = 4, iter = 4000, warmup = 2000,
+  sample_prior = TRUE #added for later use. 
+)
+
+#pp_check now looks ok. 
+pp_check(brm_mod, nsamples = 100)
+
+```
+
+The priors from the meta-model can now be incorporated as priors into the model 
+from the previous chunk because we are working on the same scale. 
+
