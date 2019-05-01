@@ -183,8 +183,11 @@ I still think that when we sample, it is not really treating this as two differe
 ```{r}
 
 #using fitted() to extract samples/predict
-mod_line <- fitted(brm_mod) %>% #population parameters (fitted).
+mod_line <- predict(brm_mod, summary = FALSE) %>% #population parameters (fitted).
   cbind.data.frame(pitch3)
+
+#reshape this 
+mod_wer <- predict(brm_mod, summary = FALSE) 
 
 #predictions plot split violin
 p1 <- mod_line %>%
@@ -289,6 +292,8 @@ p1 <- ggplot() +
 p_samp_met <- prior_samples(brm_meta)
 po_samp_met <- posterior_samples(brm_meta)
 
+pred_met <- 
+
 #plot 
 p2 <- ggplot() +
   geom_density(data = p_samp_met, aes(x = b), fill = "red", alpha = 0.3)+
@@ -387,4 +392,18 @@ summary(brm_out1)
 plot(brm_out1)
 
 ```
+
+
+#8000 samples from each row transformation. 
+#make a function. 
+
+#getting to the log-scale 
+samples_from_posterior*sd(log(PitchSD))+mean(log(PitchSD))
+
+#getting to the natural scale 
+exp(whatever)
+
+#z-scale 
+(samples - mean(PitchSD))/sd(PitchSD)
+
 
