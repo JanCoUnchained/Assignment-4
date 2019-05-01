@@ -184,7 +184,7 @@ I still think that when we sample, it is not really treating this as two differe
 #reshape this 
 mod_wer <- predict(brm_mod, summary = FALSE) 
 
-mod_wer_2 <- as.data.frame(mod_line) %>%
+mod_wer_2 <- as.data.frame(mod_wer) %>%
   reshape2::melt() %>%
   mutate(id = str_extract(variable, "\\d+")) %>%
   select(-variable)
@@ -196,44 +196,36 @@ pt_pred <- pitch3 %>%
 
 # motherfuck
 
-#predictions plot split violin
-p1 <- mod_line %>%
-  ggplot(aes(x = diagnosis, y = Estimate,
-             color = factor(diagnosis),
-             fill = factor(diagnosis))) +
-  geom_split_violin() +
-  geom_jitter(alpha = 0.4, width = 0.4)
+pt_pred0 <- pt_pred %>%
+  filter(diagnosis == "0")
 
-#plot of data split violin 
-p2 <- pitch3 %>%
-  ggplot(aes(x = diagnosis, y = pitchSDLOGz,
-             color = factor(diagnosis),
-             fill = factor(diagnosis)))+
-  geom_split_violin() +
-  geom_jitter(alpha = 0.4, width = 0.4) +
-  ylim(-1, 2) #NB
+pt_pred1 <- pt_pred %>%
+  filter(diagnosis == "1")
 
-#studies plot data
-p3 <- pitch3 %>%
-  ggplot(aes(x = diagnosis, y = pitchSDLOGz,
-             color = factor(diagnosis),
-             fill = factor(diagnosis)))+
-  geom_split_violin() +
-  geom_jitter(alpha = 0.4, width = 0.4) +
-  facet_wrap(~studynr)
+ggplot() +
+  geom_split_violin(data = pt_pred0, 
+                    aes(x = diagnosis, y = value,
+                        color = factor(diagnosis))) +
+  geom_split_violin(data = pt_pred1, 
+                    aes(x = diagnosis, y = value,
+                        color = factor(diagnosis))) +
+  geom_jitter(data = pitch3,
+              aes(x = diagnosis, y = pitchSDLOGz,
+                  color = factor(diagnosis)),
+              width = -0.2,
+             size = 0.5) +
+  theme_janco_bar()
+  
 
-#studies plot prediction
-p4 <- mod_line %>%
-  ggplot(aes(x = diagnosis, y = Estimate,
-             color = factor(diagnosis),
-             fill = factor(diagnosis)))+
-  geom_split_violin() +
-  geom_jitter(alpha = 0.4, width = 0.4) +
-  facet_wrap(~studynr)
+ggplot() +
+  geom_split_violin(data = pt_pred, 
+                    aes(x = diagnosis, y = value,
+                        color = factor(diagnosis))) +
+  geom_split_violin(data = pitch3,
+                    aes(x = diagnosis, y = pitchSDLOGz,
+                        color = factor(diagnosis)),
+                    draw_quantiles = 1)
 
-# plot_grids 
-plot_grid(p1, p2) #NB see limits to scales (the real data goes way further)
-plot_grid(p3, p4) 
 ```
 
 TASK 4 (updating priors)
