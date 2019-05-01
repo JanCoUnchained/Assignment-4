@@ -115,6 +115,30 @@ pp_check(brm_mod, nsamples = 100)
 
 ```
 
-The priors from the meta-model can now be incorporated as priors into the model 
+The priors from the meta-model can now be incorporated as priors into the model
 from the previous chunk because we are working on the same scale. 
+
+--------
+
+transforming back to the natural scale
+steps:
+this function assumes that you have 
+(1) a dataframe (dataframe1) with predicted posterior (PredictivePosterior) for the effect of diagnosis (these are the things you put in). You can use the predict() function to obtain these. 
+(2) a dataframe (dataframe2) containing the logarithm of pitch standard deviation and pitch standard deviation. This dataframe will be the one which has the original observations (I.e., PitchData). 
+
+```{r}
+
+#the function
+transfer <- function(dataframe1, PredictivePosterior) {
+  dataframe1$on_log_scale <- dataframe1[[PredictivePosterior]]*sd(dataframe2$pitch_sd_log) +
+    mean(dataframe2$pitch_sd_log)
+  dataframe1$on_natural_scale <- exp(dataframe1$on_log_scale) 
+  dataframe1$on_z_scale <- (dataframe1$on_natural_scale - mean(dataframe2$pitch_sd))/sd(dataframe2$pitch_sd)
+  return(dataframe1)
+}
+
+#use the function
+transfer(dataframe1, "PredictivePosterior")
+```
+
 
