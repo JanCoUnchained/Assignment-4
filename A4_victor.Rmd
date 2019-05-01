@@ -194,6 +194,8 @@ pt_pred <- pitch3 %>%
   select(id, ID, diagnosis, studynr, trial, pitchSDLOGz) %>%
   full_join(mod_wer_2, by = "id")
 
+# motherfuck
+
 #predictions plot split violin
 p1 <- mod_line %>%
   ggplot(aes(x = diagnosis, y = Estimate,
