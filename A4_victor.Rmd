@@ -181,13 +181,18 @@ We need to know whether a sample/prediction is for one group or the other.
 I still think that when we sample, it is not really treating this as two different groups but combining the parameters in a wrong way. 
 
 ```{r}
-
-#using fitted() to extract samples/predict
-mod_line <- predict(brm_mod, summary = FALSE) %>% #population parameters (fitted).
-  cbind.data.frame(pitch3)
-
 #reshape this 
 mod_wer <- predict(brm_mod, summary = FALSE) 
+
+mod_wer_2 <- as.data.frame(mod_line) %>%
+  reshape2::melt() %>%
+  mutate(id = str_extract(variable, "\\d+")) %>%
+  select(-variable)
+
+pt_pred <- pitch3 %>%
+  rownames_to_column("id") %>%
+  select(id, ID, diagnosis, studynr, trial, pitchSDLOGz) %>%
+  full_join(mod_wer_2, by = "id")
 
 #predictions plot split violin
 p1 <- mod_line %>%
