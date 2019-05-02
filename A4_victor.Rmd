@@ -9,10 +9,20 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library(pacman)
-p_load(tidyverse, readxl, brms, metafor, brmstools, ggunchained, cowplot)
+p_load(tidyverse, readxl, brms, metafor, brmstools, ggunchained, cowplot, ggthemes)
 
 pitch <- read_excel("Assignment4PitchDatav2.xlsx")
 meta <- read_excel("Assignment4MetaData.xlsx")
+```
+
+directories.
+Here we load functions used in the plot. 
+The functions can be found in the directory linked to (A4_functions).
+
+```{r}
+baseDir <- "."
+source(paste0(baseDir, "/A4_functions.R")) #flat violin
+
 ```
 
 # TASK 1
@@ -68,13 +78,18 @@ https://vuorre.netlify.com/post/2016/09/29/meta-analysis-is-a-special-case-of-ba
 
 ```{r}
 
+#can be run instead of the model (while we work). 
+brm_matti <- readRDS("brm_matti.rds", refhook = NULL)
+
 # meta-analysis vuorre inspired. 
 brm_matti <- brm(
   yi | se(vi) ~ 1 + (1 | StudyRef), #works, we know the variance. 
   prior = set_prior("uniform(0, 10)", class = "sd"), 
   data = meta_ready, 
   iter = 10000,
-  cores = 4
+  cores = 4,
+  sample_prior = TRUE
+  #file = "brm_matti" --> we already have the file 
 ) 
 
 # model estimates for the effect size 
@@ -112,6 +127,7 @@ write something about random effects.
 pitch3 <- pitch %>%
   mutate(pitchSDLOG = log(PitchSD),
          pitchSDLOGz = scale(pitchSDLOG),
+         zpitchSD = scale(PitchSD),
          diagnosis = as.factor(diagnosis))
 ```
 
@@ -131,6 +147,9 @@ building regression model:
 
 ```{r setup, include=FALSE}
 
+#can be run instead of the model 
+brm_mod <- readRDS("brm_mod.rds", refhook = NULL)
+
 #the regression
 mod_f <- bf("pitchSDLOGz ~ diagnosis + (1|studynr) + (1 | ID) + (1|trial)")
 
@@ -144,7 +163,8 @@ brm_mod <- brm(
     prior(normal(0, 0.3), class = "sigma")),
   data = pitch3, 
   cores = 4, iter = 4000, warmup = 2000,
-  sample_prior = TRUE #added for later use. 
+  sample_prior = TRUE, #added for later use. 
+  file = "brm_mod" #saving for later use - these models take ages to run. 
 )
 
 # model estimates 
@@ -162,7 +182,9 @@ pairs(brm_mod) #looks good.
 
 #posterior predictive checks (violin is funky)
 pp_check(brm_mod, nsamples = 100) #looks ok. 
-pp_check(brm_mod, nsamples = 100, type = "violin_grouped", group = "diagnosis")
+pp_check(brm_mod, nsamples = 100, #just for fun
+         type = "violin_grouped", 
+         group = "diagnosis")
 
 #getting an idea of marginal effects
 brms::marginal_effects(brm_mod) #big effect (presumably, the scale is fucked..)
@@ -194,37 +216,91 @@ pt_pred <- pitch3 %>%
   select(id, ID, diagnosis, studynr, trial, pitchSDLOGz) %>%
   full_join(mod_wer_2, by = "id")
 
-# motherfuck
+#making function for transforming to natural scale 
+#the function
+transfer <- function(dataframe, value) {
+  dataframe$on_log <- dataframe[[value]]*sd(pitch3$pitchSDLOG) +
+    mean(pitch3$pitchSDLOG)
+  dataframe$on_nat <- exp(dataframe$on_log) 
+  dataframe$on_z <- (dataframe$on_nat - mean(pitch3$PitchSD))/sd(pitch3$PitchSD)
+  return(dataframe)
+}
 
-pt_pred0 <- pt_pred %>%
-  filter(diagnosis == "0")
+# use the function
+great <- transfer(pt_pred, "value")
 
-pt_pred1 <- pt_pred %>%
-  filter(diagnosis == "1")
+# recode factor for better plot
+great <- great %>%
+  mutate(d = diagnosis,
+        d = fct_recode(d, control = "0"),
+        d = fct_recode(d, schizophrenia = "1"))
 
-ggplot() +
-  geom_split_violin(data = pt_pred0, 
-                    aes(x = diagnosis, y = value,
-                        color = factor(diagnosis))) +
-  geom_split_violin(data = pt_pred1, 
-                    aes(x = diagnosis, y = value,
-                        color = factor(diagnosis))) +
-  geom_jitter(data = pitch3,
-              aes(x = diagnosis, y = pitchSDLOGz,
-                  color = factor(diagnosis)),
-              width = -0.2,
-             size = 0.5) +
-  theme_janco_bar()
-  
+pitch3 <- pitch3 %>%
+  mutate(d = diagnosis,
+        d = fct_recode(d, control = "0"),
+         d = fct_recode(d, schizophrenia = "1"))
 
-ggplot() +
-  geom_split_violin(data = pt_pred, 
-                    aes(x = diagnosis, y = value,
-                        color = factor(diagnosis))) +
-  geom_split_violin(data = pitch3,
-                    aes(x = diagnosis, y = pitchSDLOGz,
-                        color = factor(diagnosis)),
-                    draw_quantiles = 1)
+#subsetting
+great0 <- great %>%
+  filter(d == "control")
+
+great1 <- great %>%
+  filter(d == "schizophrenia")
+
+#preparing raincloud (can be customized)
+raincloud_theme = theme(
+text = element_text(size = 10),
+axis.title.x = element_text(size = 16),
+axis.title.y = element_text(size = 16),
+axis.text = element_text(size = 14),
+axis.text.x = element_text(vjust = 0.5),
+legend.title=element_text(size=16),
+legend.text=element_text(size=16),
+legend.position = "right",
+plot.title = element_text(lineheight=.8, face="bold", size = 16),
+panel.border = element_blank(),
+panel.grid.minor = element_blank(),
+panel.grid.major = element_blank(),
+axis.line.x = element_line(colour = 'black', size=0.5, linetype='solid'),
+axis.line.y = element_line(colour = 'black', size=0.5, linetype='solid'))
+
+#raincloud plot
+g <- ggplot() +
+  geom_flat_violin(data = great0, 
+                    aes(x = d, y = on_z,
+                        color = factor(d),
+                        fill = factor(d)),
+                        position = position_nudge(x = .2, y = 0), alpha = .8) +
+  geom_flat_violin(data = great1, 
+                    aes(x = d, y = on_z,
+                        color = factor(d),
+                        fill = factor(d)),
+                        position = position_nudge(x = .2, y = 0), alpha = .8) +
+  geom_point(data = pitch3,
+              aes(x = d, y = zpitchSD,
+                  color = factor(d)), 
+                  position = position_jitter(width = .15), 
+                  size = .5, alpha = 0.8) +
+  geom_boxplot(data = pitch3,
+              aes(x = d, y = zpitchSD,
+                  color = factor(d)),
+              width = .1, outlier.shape = NA, alpha = 0.5) +
+  expand_limits(x = 3) +
+  guides(fill = FALSE) + 
+  guides(color = FALSE) +
+  scale_fill_tableau() +
+  scale_color_tableau() +
+  coord_flip() +
+  theme_bw() +
+  ylim(-2,5) +
+  labs(title = "standard deviaton of pitch for HC & SZ",
+       subtitle = "predictive posterier as violin & raw data as points", 
+       x = "diagnosis", 
+       y = "z scaled effect size") + #sets the legend title.
+  raincloud_theme
+
+#call the plot
+g
 
 ```
 
@@ -232,8 +308,11 @@ TASK 4 (updating priors)
 4.1 re-running the model with meta-analytic priors
 
 ```{r}
-#remembering the estimates that go into the prior
-brm_matti
+#instead of running we can load
+brm_meta <- readRDS("brm_meta.rds", refhook = NULL)
+
+#the regression
+mod_f <- bf("pitchSDLOGz ~ diagnosis + (1|studynr) + (1 | ID) + (1|trial)")
 
 #running the model 
 brm_meta <- brm(
@@ -241,11 +320,12 @@ brm_meta <- brm(
   prior = c(
     prior(normal(0, 0.2), class = "Intercept"),
     prior(normal(0, 0.2), class = "sd"),
-    prior(normal(-0.57, 0.24), class = "b"), #prior from meta. 
+    prior(normal(-0.57, 0.25), class = "b"), #prior from meta. 
     prior(normal(0, 0.3), class = "sigma")),
   data = pitch3, 
   cores = 4, iter = 4000, warmup = 2000,
-  sample_prior = TRUE
+  sample_prior = TRUE,
+  file = "brm_meta"
 )
 
 #estimates 
@@ -277,34 +357,38 @@ As will be clear from the plot (bottom of the chunk) the priors are quite differ
 p_samp_mod <- prior_samples(brm_mod) 
 po_samp_mod <- posterior_samples(brm_mod)
 
-#plot 
+#sampling prior & posterior from brm_meta
+p_samp_met <- prior_samples(brm_meta)
+po_samp_met <- posterior_samples(brm_meta)
+
+#transforming with the "transfer" function
+pr_scep_trans <- transfer(p_samp_mod, "b")
+po_scep_trans <- transfer(po_samp_mod, "b_diagnosis1")
+pr_met_trans <- transfer(p_samp_met, "b")
+po_met_trans <- transfer(po_samp_met, "b_diagnosis1")
+
+#plot 1 (sceptic priors)
 p1 <- ggplot() +
-  geom_density(data = p_samp_mod, aes(x = b), fill = "red", alpha = 0.3)+
-  geom_density(data = po_samp_mod, aes(x = b_diagnosis1), fill = "blue", alpha = 0.3)+
-  xlab("effect of diagnosis in log & z-scale space regularizing prior") + 
+  geom_density(data = pr_scep_trans, aes(x = b), fill = "red", alpha = 0.3)+
+  geom_density(data = po_scep_trans, aes(x = b_diagnosis1), fill = "blue", alpha = 0.3)+
+  xlab("effect of diagnosis on z-scale space regularizing prior") + 
   labs(title = "difference between prior and posterior", 
        subtitle = "regularizing prior",
        caption = "red = prior\n blue = posterior") +
   theme_janco_point() 
 
-#sampling prior & posterior from brm_meta
-p_samp_met <- prior_samples(brm_meta)
-po_samp_met <- posterior_samples(brm_meta)
-
-pred_met <- 
-
-#plot 
+#plot 2 (meta)
 p2 <- ggplot() +
-  geom_density(data = p_samp_met, aes(x = b), fill = "red", alpha = 0.3)+
-  geom_density(data = po_samp_met, aes(x = b_diagnosis1), fill = "blue", alpha = 0.3)+
-  xlab("effect of diagnosis in log & z-scale space") + 
+  geom_density(data = pr_met_trans, aes(x = b), fill = "red", alpha = 0.3)+
+  geom_density(data = po_met_trans, aes(x = b_diagnosis1), fill = "blue", alpha = 0.3)+
+  xlab("effect of diagnosis on z-scale") + 
   labs(title = "difference between prior and posterior",
        subtitle = "meta-analytic prior", 
        caption = "red = prior\n blue = posterior") +
   theme_janco_point() 
 
 #plot grid 
-plot_grid(p1, p2)
+plot_grid(p1, p2) #good comparison. does seem like the meta-prior should be slightly better. 
 
 ```
 
@@ -316,55 +400,69 @@ The posteriors are virtually identical.
 
 #plot comparing the posteriors 
 p3 <- ggplot() +
-  geom_density(data = po_samp_mod, aes(x = b_diagnosis1), 
+  geom_density(data = po_scep_trans, aes(x = b_diagnosis1), 
                fill = "red", alpha = 0.3)+
-  geom_density(data = po_samp_met, aes(x = b_diagnosis1), 
+  geom_density(data = po_met_trans, aes(x = b_diagnosis1), 
                fill = "blue", alpha = 0.3) +
-  xlab("effect of diagnosis in log & z-scale space") + 
+  xlab("effect of diagnosis on z-scale") + 
   labs(title = "difference between posteriors",
        subtitle = "regularizing & meta-analytic priors", 
        caption = "red = regularizing prior\n blue = meta-analytic prior") +
-  geom_vline(data = po_samp_met, aes(xintercept = mean(b_diagnosis1)), color = "black") +
-  geom_vline(data = po_samp_mod, aes(xintercept = mean(b_diagnosis1)), color = "black") +
+  geom_vline(data = po_samp_met, aes(xintercept = mean(b_diagnosis1)), color = "black", linetype = "dashed") +
+  geom_vline(data = po_samp_mod, aes(xintercept = mean(b_diagnosis1)), color = "black", linetype = "dashed") +
   theme_janco_point() 
 
-p3
+#call the plot
+p3 #not sure about the vline()
 
 ```
 
 TASK 5 (continued)
-5.3 compare relative distance from truth (WAIC)
+5.3 compare relative distance from truth (WAIC).
+
+Notice that they are identical now (actually the sceptic is infinitesimally better). This might be because I hacked the priors more. Very hard to set priors after so many conversions. 
 
 ```{r}
 #extracting criterion 
 meta_waic <- add_criterion(brm_meta, "waic")
-main_waic <- add_criterion(brm_mod, "waic")
+scep_waic <- add_criterion(brm_mod, "waic")
 
 #comparing WAIC
-comp_score <- loo_compare(meta_waic, main_waic, criterion = "waic")
+comp_score <- loo_compare(meta_waic, scep_waic, criterion = "waic")
 print(comp_score, simplify = F)
 
-#comparing them 
-waic(meta_mod, brm_mod) #the outcome of the meta-analysis does slightly better
 ```
 
 TASK 5 (continued)
-5.4 discuss how they compare & whether any is best
+5.4 discuss how they compare & whether any is best.
 
 -----------
 TASK 6
-prepare write-up 
+prepare write-up.
 
 -----------
 TASK 7 (optional)
 how sceptical should a prior be?
 compare different priors (using WAIC)
 
+```{r}
+
+#(very) weakly regularizing prior
+
+#regularizing prior
+
+#sceptical prior
+
+```
+
+
 -----------
 TASK 8 (optional)
 include other predictors 
 --> age, gender, education
 --> main effects or interactions?
+
+Note: we only have these predictors in the "meta", not in the "pitch". 
 
 -----------
 TASK 9 (optional)
