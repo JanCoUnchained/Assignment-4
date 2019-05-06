@@ -1,0 +1,155 @@
+---
+title: "plottyplotty"
+author: "Victor Møller"
+date: "6 maj 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#melting avg
+avg2 <- as.data.frame(avg) %>%
+  reshape2::melt() %>%
+  mutate(id = str_extract(variable, "\\d+")) %>%
+  select(-variable)
+
+avg_pred <- pitch3 %>%
+  rownames_to_column("id") %>%
+  select(id, ID, diagnosis, studynr, trial, pitchSDLOGz) %>%
+  full_join(avg2, by = "id")
+
+# use the function
+avg_pred <- transfer(avg_pred, "value")
+
+# recode factor for better plot
+avg_pred <- avg_pred %>%
+  mutate(d = diagnosis,
+        d = fct_recode(d, control = "0"),
+        d = fct_recode(d, schizophrenia = "1"))
+
+#subsetting
+avg_pred0 <- avg_pred %>%
+  filter(d == "control")
+
+avg_pred1 <- avg_pred %>%
+  filter(d == "schizophrenia")
+
+#raincloud plot
+g1 <- ggplot() +
+  geom_flat_violin(data = avg_pred0, 
+                    aes(x = d, y = on_z,
+                        color = factor(d),
+                        fill = factor(d)),
+                        position = position_nudge(x = .2, y = 0), alpha = .8) +
+  geom_flat_violin(data = avg_pred1, 
+                    aes(x = d, y = on_z,
+                        color = factor(d),
+                        fill = factor(d)),
+                        position = position_nudge(x = .2, y = 0), alpha = .8) +
+  geom_point(data = pitch3,
+              aes(x = d, y = zpitchSD,
+                  color = factor(d)), 
+                  position = position_jitter(width = .15), 
+                  size = .5, alpha = 0.8) +
+  geom_boxplot(data = pitch3,
+              aes(x = d, y = zpitchSD,
+                  color = factor(d)),
+              width = .1, outlier.shape = NA, alpha = 0.5) +
+  expand_limits(x = 3) +
+  guides(fill = FALSE) + 
+  guides(color = FALSE) +
+  scale_fill_tableau() +
+  scale_color_tableau() +
+  coord_flip() +
+  theme_bw() +
+  ylim(-2,5) +
+  labs(subtitle = "averaged over the random effects", 
+       x = "diagnosis", 
+       y = "z scaled effect size") + #sets the legend title.
+  raincloud_theme
+
+#call the plot
+g1
+```
+
+second plot
+
+```{r}
+
+#melting avg
+mar2 <- as.data.frame(mar) %>%
+  reshape2::melt() %>%
+  mutate(id = str_extract(variable, "\\d+")) %>%
+  select(-variable)
+
+mar_pred <- pitch3 %>%
+  rownames_to_column("id") %>%
+  select(id, ID, diagnosis, studynr, trial, pitchSDLOGz) %>%
+  full_join(mar2, by = "id")
+
+# use the function
+mar_pred <- transfer(mar_pred, "value")
+
+# recode factor for better plot
+mar_pred <- mar_pred %>%
+  mutate(d = diagnosis,
+        d = fct_recode(d, control = "0"),
+        d = fct_recode(d, schizophrenia = "1"))
+
+#subsetting
+mar_pred0 <- mar_pred %>%
+  filter(d == "control")
+
+mar_pred1 <- mar_pred %>%
+  filter(d == "schizophrenia")
+
+#raincloud plot
+g2 <- ggplot() +
+  geom_flat_violin(data = mar_pred0, 
+                    aes(x = d, y = on_z,
+                        color = factor(d),
+                        fill = factor(d)),
+                        position = position_nudge(x = .2, y = 0), alpha = .8) +
+  geom_flat_violin(data = mar_pred1, 
+                    aes(x = d, y = on_z,
+                        color = factor(d),
+                        fill = factor(d)),
+                        position = position_nudge(x = .2, y = 0), alpha = .8) +
+  geom_point(data = pitch3,
+              aes(x = d, y = zpitchSD,
+                  color = factor(d)), 
+                  position = position_jitter(width = .15), 
+                  size = .5, alpha = 0.8) +
+  geom_boxplot(data = pitch3,
+              aes(x = d, y = zpitchSD,
+                  color = factor(d)),
+              width = .1, outlier.shape = NA, alpha = 0.5) +
+  expand_limits(x = 3) +
+  guides(fill = FALSE) + 
+  guides(color = FALSE) +
+  scale_fill_tableau() +
+  scale_color_tableau() +
+  coord_flip() +
+  theme_bw() +
+  ylim(-2,5) +
+  labs(subtitle = "marginal of the random effects", 
+       x = "diagnosis", 
+       y = "z scaled effect size") + #sets the legend title.
+  raincloud_theme
+
+#call the plot
+g2
+
+library(cowplot)
+plot_grid(g, g1, g2)
+
+#there is a difference
+mean(mar_pred0$on_z)
+mean(avg_pred0$on_z)
+mean(great0$on_z)
+
+mean(mar_pred1$on_z)
+mean(avg_pred1$on_z)
+mean(great1$on_z)
+
+```
+
