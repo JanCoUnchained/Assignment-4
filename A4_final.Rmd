@@ -400,19 +400,22 @@ TASK 5 (continued)
 The posteriors are virtually identical. 
 
 ```{r}
+eff_sizes <- tibble(sceptical = mod_avg_pred_eff$effect,
+                    meta = meta_avg_pred_eff$effect)
+
 
 #plot comparing the posteriors 
 p3 <- ggplot() +
-  geom_density(data = po_scep_trans, aes(x = b_diagnosis1), 
+  geom_density(data = eff_sizes, aes(x = sceptical), 
                fill = "red", alpha = 0.3)+
-  geom_density(data = po_met_trans, aes(x = b_diagnosis1), 
+  geom_density(data = eff_sizes, aes(x = meta), 
                fill = "blue", alpha = 0.3) +
   xlab("effect of diagnosis on z-scale") + 
-  labs(title = "difference between posteriors",
-       subtitle = "regularizing & meta-analytic priors", 
+  labs(title = "difference between effect sizes",
+       subtitle = "comparing regularizing & meta-analytic priors", 
        caption = "red = regularizing prior\n blue = meta-analytic prior") +
-  geom_vline(data = po_samp_met, aes(xintercept = mean(b_diagnosis1)), color = "black", linetype = "dashed") +
-  geom_vline(data = po_samp_mod, aes(xintercept = mean(b_diagnosis1)), color = "black", linetype = "dashed") +
+  geom_vline(data = eff_sizes, aes(xintercept = mean(sceptical)), color = "black", linetype = "dashed") +
+  geom_vline(data = eff_sizes, aes(xintercept = mean(meta)), color = "black", linetype = "dashed") +
   theme_janco_point() 
 
 #call the plot
@@ -439,42 +442,70 @@ print(comp_score, simplify = F)
 reporting 
 
 ```{r}
-post_mod <- posterior_samples(brm_mod)
+transfer <- function(dataframe, value) {
+  dataframe$on_log <- dataframe[[value]]*sd(pitch3$pitchSDLOG) +
+    mean(pitch3$pitchSDLOG)
+  dataframe$on_nat <- exp(dataframe$on_log) 
+  dataframe$on_z <- (dataframe$on_nat - mean(pitch3$PitchSD))/sd(pitch3$PitchSD)
+  return(dataframe)
+}
 
-tibble_post_mod <- post_mod %>% 
-  gather() %>% 
-  group_by(key) %>% 
-  mean_hdi(value, .width = .99)
+###
+# avg pred BRM_MOD
+###
+d.pred <- distinct(pitch3, diagnosis)
 
-post_met <- posterior_samples(brm_meta)
+mod_avg = fitted(brm_mod, re_formula = NA, newdata = d.pred, summary = FALSE)
 
-tibble_post_met <- post_met %>%
+mod_avg2 <- as.data.frame(mod_avg) %>%
   gather() %>%
-  group_by(key) %>%
-  mean_hdi(value, .width = .99)
+  mutate(diagnosis = ifelse(key == "V1", 0, 1))
 
-#transformation own priors
-head(tibble_post_mod) 
-stuff <- c("value", "lower", "upper")
-value <- c(-0.402, -4.79e-1, -0.323)
-df <- data.frame(stuff, value)
-df_mod <- transfer(df, "value")
+mod_avg_pred <- transfer(mod_avg2, "value")
 
-#transformations meta priors 
-head(tibble_post_met)
-value <- c(-0.419, -4.94e-1, -0.345)
-df1 <- data.frame(stuff, value)
-df1_met <- transfer(df1, "value")
+mod_avg_pred0 <- mod_avg_pred %>%
+  filter(diagnosis == "0") %>%
+  select(z0 = on_z)
 
-#malte code 
-#default: groupings from data (what we did already)
+mod_avg_pred1 <- mod_avg_pred %>%
+  filter(diagnosis == "1") %>%
+  select(z1 = on_z)
 
-#average actor
-d.pred <- distinct(pitch3, diagnosis, studynr, ID, trial)
-avg = predict(brm_mod, re_formula = NA, newdata = d.pred, summary = FALSE)
+mod_avg_pred_eff <- cbind.data.frame(mod_avg_pred0, mod_avg_pred1) %>%
+  mutate(effect = z1 - z0)
 
-#marginal actor
-mar = predict(brm_mod, newdata = d.pred, allow_new_levels = TRUE, sample_new_levels = "gaussian", summary = FALSE)
+rethinking::dens(mod_avg_pred_eff$effect)
+round(rethinking::HPDI(mod_avg_pred_eff$effect, prob = 0.99), 2)
+
+
+
+###
+# avg pred BRM_META
+###
+d.pred <- distinct(pitch3, diagnosis)
+
+meta_avg = fitted(brm_meta, re_formula = NA, newdata = d.pred, summary = FALSE)
+
+meta_avg2 <- as.data.frame(meta_avg) %>%
+  gather() %>%
+  mutate(diagnosis = ifelse(key == "V1", 0, 1))
+
+meta_avg_pred <- transfer(meta_avg2, "value")
+
+meta_avg_pred0 <- meta_avg_pred %>%
+  filter(diagnosis == "0") %>%
+  select(z0 = on_z)
+
+meta_avg_pred1 <- meta_avg_pred %>%
+  filter(diagnosis == "1") %>%
+  select(z1 = on_z)
+
+meta_avg_pred_eff <- cbind.data.frame(meta_avg_pred0, meta_avg_pred1) %>%
+  mutate(effect = z1 - z0)
+
+rethinking::dens(meta_avg_pred_eff$effect)
+round(rethinking::HPDI(meta_avg_pred_eff$effect, prob = 0.99), 2)
+
 
 #IMPORTANT!! plots of this is to be found in "randomplots.Rmd"
 #run that code & then this can be run. 
