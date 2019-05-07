@@ -9,7 +9,8 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library(pacman)
-p_load(tidyverse, readxl, brms, metafor, brmstools, ggunchained, cowplot, ggthemes)
+p_load(tidyverse, readxl, brms, metafor, brmstools, 
+       ggunchained, cowplot, ggthemes, tidybayes)
 
 pitch <- read_excel("Assignment4PitchDatav2.xlsx")
 meta <- read_excel("Assignment4MetaData.xlsx")
@@ -438,24 +439,6 @@ print(comp_score, simplify = F)
 reporting 
 
 ```{r}
-
-#for reporting (confidence interval)
-brm_meta
-value <- c(-0.42, 0.05, -0.51, -0.33)
-whatitis <- c("eff_size", "es. error", "lower 95%", "upper 95%")
-meta_sum <- data.frame(whatitis, value)
-brm_mod
-value <- c(-0.40, 0.04, -0.50, -0.31)
-mod_sum <- data.frame(whatitis, value)
-
-#conversion (to z-scale)
-meta_t <- transfer(meta_sum, "value") #summary stats for meta prior
-mod_t <- transfer(mod_sum, "value") #summary stats for own prior 
-
-#based on tidybayes / recoding
-install.packages("tidybayes")
-library(tidybayes)
-
 post_mod <- posterior_samples(brm_mod)
 
 tibble_post_mod <- post_mod %>% 
