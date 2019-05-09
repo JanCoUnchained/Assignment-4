@@ -65,7 +65,7 @@ meta_clean <- meta_clean %>%
   mutate(logmeanSZ = log(PITCH_F0SD_SZ_M) - 0.5 * varSDSZ,
          logmeanHC = log(PITCH_F0SD_HC_M) - 0.5 * varSDHC)
 
-#effect size pitch SD (this z-scales I think)
+#caluclate effect of processed pitch SD (from the metafor package)
 meta_ready=escalc('SMD', n1i=SAMPLE_SIZE_SZ, n2i=SAMPLE_SIZE_CT, m1i=logmeanSZ,
 m2i=logmeanHC, sd1i=logSDSZ, sd2i=logSDHC,
 data = meta_clean)
@@ -77,20 +77,23 @@ meta analysis model.
 refer for the approach taken: 
 https://vuorre.netlify.com/post/2016/09/29/meta-analysis-is-a-special-case-of-bayesian-multilevel-modeling/ 
 
-```{r}
+Chunks where models are fitted also contain a line, which loads the saved model object from earlier. That way, they don't have to be fitted over and over again.
 
+```{r}
+# OBJECT
 #can be run instead of the model (while we work). 
 brm_matti <- readRDS("brm_matti.rds", refhook = NULL)
 
+# CALL
 # meta-analysis vuorre inspired. 
 brm_matti <- brm(
-  yi | se(vi) ~ 1 + (1 | StudyRef), #works, we know the variance. 
+  yi | se(vi) ~ 1 + (1 | StudyRef), 
   prior = set_prior("uniform(0, 10)", class = "sd"), 
   data = meta_ready, 
   iter = 10000,
   cores = 4,
   sample_prior = TRUE
-  #file = "brm_matti" --> we already have the file 
+  #file = "brm_matti" --> to save the object
 ) 
 
 # model estimates for the effect size 
@@ -169,7 +172,7 @@ brm_mod <- brm(
 )
 
 # model estimates 
-brm_mod #could be improved (when is it hacking?..) 
+brm_mod
 
 ```
 
@@ -181,19 +184,18 @@ TASK 3 (continued)
 plot(brm_mod) #looks good. 
 pairs(brm_mod) #looks good. 
 
-#posterior predictive checks (violin is funky)
+#posterior predictive checks
 pp_check(brm_mod, nsamples = 100) #looks ok. 
 pp_check(brm_mod, nsamples = 100, #just for fun
          type = "violin_grouped", 
          group = "diagnosis")
 
 #getting an idea of marginal effects
-brms::marginal_effects(brm_mod) #big effect (presumably, the scale is fucked..)
+brms::marginal_effects(brm_mod) # cannot be reported. It's trying to count effect size on a log-scale.
 ```
 
 TASK 3 (continued)
 more plots.
-THIS IS THE ONLY THING STILL HOLDING US BACK!
 Ideas as to why this is not working (I.e., looks weird):
 --> how are we sampling? (I.e., something about random effects, pooling?)
 --> could we reparameterize our model so that we actually predict both groups directly?
@@ -419,14 +421,14 @@ p3 <- ggplot() +
   theme_janco_point() 
 
 #call the plot
-p3 #not sure about the vline()
+p3 
 
 ```
 
 TASK 5 (continued)
 5.3 compare relative distance from truth (WAIC).
 
-Notice that they are identical now (actually the sceptic is infinitesimally better). This might be because I hacked the priors more. Very hard to set priors after so many conversions. 
+Notice that they are identical now (actually the sceptic is infinitesimally better). Very hard to set priors after so many conversions. 
 
 ```{r}
 #extracting criterion 
@@ -511,7 +513,6 @@ round(rethinking::HPDI(meta_avg_pred_eff$effect, prob = 0.99), 2)
 #run that code & then this can be run. 
 #NB: there is a difference in the violins even though it looks very similar. 
 plot_grid(g, g1, g2) 
-
 ```
 
 TASK 5 (continued)
